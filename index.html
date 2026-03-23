@@ -2,8 +2,8 @@
 <html lang="pt-br">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Caça ao Tesouro - Navegação</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Caça ao Tesouro - Navegação Inercial</title>
 
 <style>
 body {
@@ -11,9 +11,11 @@ body {
   text-align: center;
   background: #0f172a;
   color: white;
+  margin: 0;
+  padding: 16px;
 }
 
-h1 { margin-top: 10px; }
+h1 { margin-top: 10px; font-size: 1.8rem; }
 
 .box {
   margin: 5px;
@@ -21,11 +23,12 @@ h1 { margin-top: 10px; }
 
 .card {
   background: #1e293b;
-  padding: 10px;
-  margin: 10px auto;
-  border-radius: 10px;
+  padding: 12px;
+  margin: 12px auto;
+  border-radius: 16px;
   width: 90%;
-  max-width: 400px;
+  max-width: 500px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
 }
 
 .big {
@@ -34,16 +37,40 @@ h1 { margin-top: 10px; }
 }
 
 button {
-  padding: 10px;
-  border-radius: 8px;
+  padding: 12px 20px;
+  border-radius: 30px;
   border: none;
-  margin: 5px;
+  margin: 8px;
+  font-weight: bold;
+  background-color: #3b82f6;
+  color: white;
+  cursor: pointer;
+  transition: background 0.2s;
 }
+button:active { background-color: #2563eb; }
 
 #arrow {
   font-size: 80px;
   transform: rotate(0deg);
   transition: transform 0.2s linear;
+}
+
+.sensor-row {
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 0;
+  font-size: 0.9rem;
+  font-family: monospace;
+}
+
+hr {
+  margin: 12px 0;
+  border-color: #334155;
+}
+
+.quat {
+  word-break: break-all;
+  font-size: 0.85rem;
 }
 </style>
 </head>
@@ -58,151 +85,388 @@ button {
 </div>
 
 <div class="card">
-  <p>Heading: <span id="heading">--</span>°</p>
-  <p>Bearing: <span id="bearing">--</span>°</p>
-  <p>Distância: <span id="distance">--</span> m</p>
+  <p><strong>Rumo (Heading):</strong> <span id="heading">--</span>°</p>
+  <p><strong>Rumo para WP:</strong> <span id="bearing">--</span>°</p>
+  <p><strong>Distância:</strong> <span id="distance">--</span> m</p>
 </div>
 
 <div class="card">
+  <div><strong>📍 Posição (GPS)</strong></div>
   <div>Lat: <span id="lat">--</span></div>
   <div>Lon: <span id="lon">--</span></div>
-  <div>Alt: <span id="alt">--</span></div>
+  <div>Alt: <span id="alt">--</span> m</div>
 </div>
 
-<button onclick="pedirPermissao()">Ativar sensores</button>
-<button onclick="downloadTrack()">Baixar trajeto</button>
+<div class="card">
+  <div><strong>📐 Ângulos (Euler)</strong></div>
+  <div class="sensor-row"><span>Roll (γ):</span> <span id="roll">--</span>°</div>
+  <div class="sensor-row"><span>Pitch (β):</span> <span id="pitch">--</span>°</div>
+  <div class="sensor-row"><span>Heading (α):</span> <span id="heading_euler">--</span>°</div>
+  <hr>
+  <div><strong>⚡ Giroscópio (°/s)</strong></div>
+  <div class="sensor-row"><span>ωx:</span> <span id="gyro_x">--</span></div>
+  <div class="sensor-row"><span>ωy:</span> <span id="gyro_y">--</span></div>
+  <div class="sensor-row"><span>ωz:</span> <span id="gyro_z">--</span></div>
+  <hr>
+  <div><strong>📊 Acelerômetro (m/s²)</strong></div>
+  <div class="sensor-row"><span>ax:</span> <span id="acc_x">--</span></div>
+  <div class="sensor-row"><span>ay:</span> <span id="acc_y">--</span></div>
+  <div class="sensor-row"><span>az:</span> <span id="acc_z">--</span></div>
+  <hr>
+  <div><strong>🌀 Quaternion (se disponível)</strong></div>
+  <div class="quat" id="quat_display">--</div>
+</div>
+
+<button onclick="requestAllPermissions()">🔓 Ativar todos os sensores</button>
+<button onclick="downloadTrack()">💾 Baixar trajeto (JSON)</button>
 
 <script>
-
-let waypoints = [
-  {lat: -15.76403276, lon: -47.87260399},
-  {lat: -15.76383965, lon: -47.87349132},
-  {lat: -15.76403276, lon: -47.87260399}
+// ---------- CONFIGURAÇÃO DOS WAYPOINTS ----------
+const waypoints = [
+  { lat: -15.76403276, lon: -47.87260399 },
+  { lat: -15.76383965, lon: -47.87349132 },
+  { lat: -15.76446504, lon: -47.8709265 }
 ];
 
-let currentWP = 0;
-let heading = 0;
-let track = [];
+let currentWP = 0;               // índice do próximo waypoint
+let heading = 0;                 // heading magnético do deviceorientationabsolute
+let track = [];                  // armazena logs (GPS + IMU)
 
-function pedirPermissao(){
-  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-    DeviceOrientationEvent.requestPermission()
-      .then(response => {
-        if (response === 'granted') {
-          iniciar();
-        }
-      })
-      .catch(console.error);
-  } else {
-    iniciar();
-  }
-}
+// ---------- DADOS DOS SENSORES ----------
+let lastAccel = { x: null, y: null, z: null };
+let lastGyro  = { x: null, y: null, z: null };
+let lastEuler = { alpha: null, beta: null, gamma: null }; // alpha = heading, beta = pitch, gamma = roll
+let lastQuat  = null;            // array [x,y,z,w] ou null
 
-function iniciar(){
+// ---------- FUNÇÕES AUXILIARES ----------
+function toRad(deg) { return deg * Math.PI / 180; }
+function toDeg(rad) { return rad * 180 / Math.PI; }
 
-  window.addEventListener("deviceorientationabsolute", (event) => {
-    if (event.alpha !== null) {
-      heading = 360 - event.alpha;
-      document.getElementById("heading").innerText = heading.toFixed(1);
-    }
-  });
-
-  navigator.geolocation.watchPosition(pos => {
-
-    let lat = pos.coords.latitude;
-    let lon = pos.coords.longitude;
-
-    document.getElementById("lat").innerText = lat.toFixed(6);
-    document.getElementById("lon").innerText = lon.toFixed(6);
-    document.getElementById("alt").innerText = pos.coords.altitude?.toFixed(1) ?? "N/A";
-
-    let target = waypoints[currentWP];
-
-    let d = distance(lat, lon, target.lat, target.lon);
-    let b = bearing(lat, lon, target.lat, target.lon);
-
-    document.getElementById("distance").innerText = d.toFixed(1);
-    document.getElementById("bearing").innerText = b.toFixed(1);
-
-    let err = headingError(heading, b);
-
-    let instrucao = "";
-
-    if (Math.abs(err) < 5) {
-      instrucao = "Siga em frente";
-    } else if (err > 0) {
-      instrucao = "Vire " + err.toFixed(0) + "° à direita";
-    } else {
-      instrucao = "Vire " + Math.abs(err).toFixed(0) + "° à esquerda";
-    }
-
-    document.getElementById("instrucao").innerText = instrucao;
-
-    document.getElementById("arrow").style.transform = `rotate(${err}deg)`;
-
-    track.push({lat, lon, t: Date.now()});
-
-    if (d < 10) {
-      alert("Waypoint " + (currentWP+1) + " alcançado!");
-      currentWP++;
-      if (currentWP >= waypoints.length) {
-        alert("Parabéns! Tesouro encontrado!");
-        currentWP = waypoints.length - 1;
-      }
-    }
-
-  }, err => console.log(err), { enableHighAccuracy: true });
-}
-
-function toRad(deg){ return deg * Math.PI / 180; }
-function toDeg(rad){ return rad * 180 / Math.PI; }
-
-function distance(lat1, lon1, lat2, lon2){
-  let R = 6371000;
-  let dLat = toRad(lat2-lat1);
-  let dLon = toRad(lon2-lon1);
-
-  let a = Math.sin(dLat/2)**2 +
-          Math.cos(toRad(lat1)) *
-          Math.cos(toRad(lat2)) *
-          Math.sin(dLon/2)**2;
-
-  let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+// Distância haversine (metros)
+function distance(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+            Math.sin(dLon/2)**2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   return R * c;
 }
 
-function bearing(lat1, lon1, lat2, lon2){
-  let dLon = toRad(lon2 - lon1);
-
-  let y = Math.sin(dLon) * Math.cos(toRad(lat2));
-  let x = Math.cos(toRad(lat1))*Math.sin(toRad(lat2)) -
-          Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(dLon);
-
+// Rumo (bearing) entre dois pontos
+function bearing(lat1, lon1, lat2, lon2) {
+  const dLon = toRad(lon2 - lon1);
+  const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1))*Math.sin(toRad(lat2)) -
+            Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(dLon);
   let brng = toDeg(Math.atan2(y, x));
   return (brng + 360) % 360;
 }
 
-function headingError(current, target){
+// Diferença angular com correção para -180..180
+function headingError(current, target) {
   let diff = target - current;
-
   if (diff > 180) diff -= 360;
   if (diff < -180) diff += 360;
-
   return diff;
 }
 
-function downloadTrack(){
-  let data = JSON.stringify(track, null, 2);
-  let blob = new Blob([data], {type: "application/json"});
-  let url = URL.createObjectURL(blob);
+// ---------- SOLICITAÇÃO DE PERMISSÕES (iOS + Android) ----------
+async function requestAllPermissions() {
+  // 1. Permissão para orientação (bússola + ângulos)
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    try {
+      const orientationPerm = await DeviceOrientationEvent.requestPermission();
+      if (orientationPerm === 'granted') {
+        window.addEventListener('deviceorientationabsolute', onDeviceOrientation);
+      }
+    } catch (err) { console.warn('Permissão orientação negada:', err); }
+  } else {
+    // Android / navegadores sem permissão explícita
+    window.addEventListener('deviceorientationabsolute', onDeviceOrientation);
+  }
 
-  let a = document.createElement("a");
-  a.href = url;
-  a.download = "trajeto.json";
-  a.click();
+  // 2. Permissão para movimento (acelerômetro + giroscópio)
+  if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+    try {
+      const motionPerm = await DeviceMotionEvent.requestPermission();
+      if (motionPerm === 'granted') {
+        window.addEventListener('devicemotion', onDeviceMotion);
+      }
+    } catch (err) { console.warn('Permissão movimento negada:', err); }
+  } else {
+    window.addEventListener('devicemotion', onDeviceMotion);
+  }
+
+  // 3. Tentar iniciar o sensor de quaternion (AbsoluteOrientationSensor)
+  startQuaternionSensor();
 }
 
-</script>
+// ---------- HANDLER DO deviceorientationabsolute (Euler absoluto) ----------
+function onDeviceOrientation(event) {
+  // alpha: ângulo em relação ao norte (0-360)
+  // beta: pitch (-180 a 180)  (frente/trás)
+  // gamma: roll (-90 a 90)    (inclinação lateral)
+  if (event.alpha !== null) {
+    // Normaliza para heading: 0 = norte, sentido horário
+    heading = 360 - event.alpha;
+    if (heading >= 360) heading -= 360;
+    document.getElementById('heading').innerText = heading.toFixed(1);
+    document.getElementById('heading_euler').innerText = event.alpha.toFixed(1);
+  }
+  if (event.beta !== null) {
+    lastEuler.beta = event.beta;
+    document.getElementById('pitch').innerText = event.beta.toFixed(1);
+  }
+  if (event.gamma !== null) {
+    lastEuler.gamma = event.gamma;
+    document.getElementById('roll').innerText = event.gamma.toFixed(1);
+  }
+  // alpha já está no heading_euler
+  lastEuler.alpha = event.alpha;
+}
 
+// ---------- HANDLER DO devicemotion (acelerômetro + giroscópio) ----------
+function onDeviceMotion(event) {
+  // Acelerômetro (com gravidade)
+  if (event.accelerationIncludingGravity) {
+    const a = event.accelerationIncludingGravity;
+    lastAccel = { x: a.x, y: a.y, z: a.z };
+    document.getElementById('acc_x').innerText = (a.x !== null ? a.x.toFixed(2) : '--');
+    document.getElementById('acc_y').innerText = (a.y !== null ? a.y.toFixed(2) : '--');
+    document.getElementById('acc_z').innerText = (a.z !== null ? a.z.toFixed(2) : '--');
+  }
+
+  // Giroscópio (rotationRate)
+  if (event.rotationRate) {
+    const r = event.rotationRate;
+    lastGyro = { x: r.alpha, y: r.beta, z: r.gamma };
+    document.getElementById('gyro_x').innerText = (r.alpha !== null ? r.alpha.toFixed(2) : '--');
+    document.getElementById('gyro_y').innerText = (r.beta  !== null ? r.beta.toFixed(2)  : '--');
+    document.getElementById('gyro_z').innerText = (r.gamma !== null ? r.gamma.toFixed(2) : '--');
+  }
+}
+
+// ---------- SENSOR DE QUATERNION (AbsoluteOrientationSensor) ----------
+function startQuaternionSensor() {
+  if (typeof AbsoluteOrientationSensor === 'undefined') {
+    console.log('AbsoluteOrientationSensor não suportado');
+    document.getElementById('quat_display').innerText = 'Não suportado';
+    return;
+  }
+
+  try {
+    const sensor = new AbsoluteOrientationSensor({ frequency: 30 });
+    sensor.addEventListener('reading', () => {
+      const q = sensor.quaternion; // [x, y, z, w]
+      lastQuat = q;
+      document.getElementById('quat_display').innerHTML =
+        `[${q[0].toFixed(3)}, ${q[1].toFixed(3)}, ${q[2].toFixed(3)}, ${q[3].toFixed(3)}]`;
+    });
+    sensor.addEventListener('error', (err) => {
+      console.error('Erro no quaternion sensor:', err);
+      document.getElementById('quat_display').innerText = 'Erro ao iniciar';
+    });
+    sensor.start();
+  } catch (err) {
+    console.error('Falha ao iniciar quaternion:', err);
+    document.getElementById('quat_display').innerText = 'Erro';
+  }
+}
+
+// ---------- GEOLOCALIZAÇÃO E NAVEGAÇÃO ----------
+function startGeolocation() {
+  navigator.geolocation.watchPosition(
+    (pos) => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      const alt = pos.coords.altitude;
+
+      // Atualiza interface
+      document.getElementById('lat').innerText = lat.toFixed(6);
+      document.getElementById('lon').innerText = lon.toFixed(6);
+      document.getElementById('alt').innerText = (alt !== null ? alt.toFixed(1) : 'N/A');
+
+      // Calcula distância e rumo para o waypoint atual
+      const target = waypoints[currentWP];
+      const dist = distance(lat, lon, target.lat, target.lon);
+      const brng = bearing(lat, lon, target.lat, target.lon);
+
+      document.getElementById('distance').innerText = dist.toFixed(1);
+      document.getElementById('bearing').innerText = brng.toFixed(1);
+
+      // Instrução com base no erro de heading
+      const err = headingError(heading, brng);
+      let instrucao = '';
+      if (Math.abs(err) < 5) {
+        instrucao = 'Siga em frente';
+      } else if (err > 0) {
+        instrucao = `Vire ${err.toFixed(0)}° à direita`;
+      } else {
+        instrucao = `Vire ${Math.abs(err).toFixed(0)}° à esquerda`;
+      }
+      document.getElementById('instrucao').innerText = instrucao;
+      document.getElementById('arrow').style.transform = `rotate(${err}deg)`;
+
+      // Verifica se chegou ao waypoint (raio 10m)
+      if (dist < 10) {
+        alert(`Waypoint ${currentWP+1} alcançado!`);
+        currentWP++;
+        if (currentWP >= waypoints.length) {
+          alert('🎉 Parabéns! Tesouro encontrado! 🎉');
+          currentWP = waypoints.length - 1; // evita estourar índice
+        }
+      }
+    },
+    (err) => console.warn('Erro GPS:', err),
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+  );
+}
+
+// ---------- REGISTRO PERIÓDICO DOS DADOS ----------
+// A cada 1 segundo, coleta todos os dados atuais e armazena no track
+function startLogging() {
+  setInterval(() => {
+    // Obtém a última posição GPS (já atualizada pelo watchPosition)
+    // Vamos guardar a última posição conhecida. Para isso, precisamos armazenar globalmente.
+    // Criamos variáveis globais para última posição.
+    if (typeof window.lastGps === 'undefined') {
+      window.lastGps = { lat: null, lon: null, alt: null };
+    }
+    // O watchPosition atualiza as variáveis, mas vamos ler dos elementos? Melhor criar variáveis globais.
+    // Já que o watchPosition atualiza o DOM, podemos também atualizar variáveis globais.
+    // Para simplificar, usaremos as mesmas variáveis que a função de geolocalização atualiza.
+    // Precisamos modificar o watchPosition para também guardar em window.lastGps.
+    // Mas farei isso dentro do watchPosition.
+
+    // Agora montamos o objeto de log
+    const logEntry = {
+      timestamp: Date.now(),
+      gps: {
+        lat: window.lastGps.lat,
+        lon: window.lastGps.lon,
+        alt: window.lastGps.alt
+      },
+      heading: heading,
+      euler: {
+        alpha: lastEuler.alpha,
+        beta: lastEuler.beta,
+        gamma: lastEuler.gamma
+      },
+      accelerometer: {
+        x: lastAccel.x,
+        y: lastAccel.y,
+        z: lastAccel.z
+      },
+      gyroscope: {
+        x: lastGyro.x,
+        y: lastGyro.y,
+        z: lastGyro.z
+      },
+      quaternion: lastQuat,
+      waypoint: {
+        index: currentWP,
+        lat: waypoints[currentWP]?.lat,
+        lon: waypoints[currentWP]?.lon
+      },
+      distanceToWP: parseFloat(document.getElementById('distance').innerText) || null,
+      bearingToWP: parseFloat(document.getElementById('bearing').innerText) || null
+    };
+    track.push(logEntry);
+    // Mantém apenas os últimos 5000 registros (evita consumo excessivo)
+    if (track.length > 5000) track.shift();
+  }, 1000);
+}
+
+// Ajusta o watchPosition para atualizar window.lastGps
+function enhancedGeolocation() {
+  navigator.geolocation.watchPosition(
+    (pos) => {
+      window.lastGps = {
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        alt: pos.coords.altitude
+      };
+      document.getElementById('lat').innerText = window.lastGps.lat.toFixed(6);
+      document.getElementById('lon').innerText = window.lastGps.lon.toFixed(6);
+      document.getElementById('alt').innerText = (window.lastGps.alt !== null ? window.lastGps.alt.toFixed(1) : 'N/A');
+
+      const target = waypoints[currentWP];
+      const dist = distance(window.lastGps.lat, window.lastGps.lon, target.lat, target.lon);
+      const brng = bearing(window.lastGps.lat, window.lastGps.lon, target.lat, target.lon);
+      document.getElementById('distance').innerText = dist.toFixed(1);
+      document.getElementById('bearing').innerText = brng.toFixed(1);
+
+      const err = headingError(heading, brng);
+      let instrucao = '';
+      if (Math.abs(err) < 5) instrucao = 'Siga em frente';
+      else if (err > 0) instrucao = `Vire ${err.toFixed(0)}° à direita`;
+      else instrucao = `Vire ${Math.abs(err).toFixed(0)}° à esquerda`;
+      document.getElementById('instrucao').innerText = instrucao;
+      document.getElementById('arrow').style.transform = `rotate(${err}deg)`;
+
+      if (dist < 10) {
+        alert(`Waypoint ${currentWP+1} alcançado!`);
+        currentWP++;
+        if (currentWP >= waypoints.length) {
+          alert('🎉 Parabéns! Tesouro encontrado! 🎉');
+          currentWP = waypoints.length - 1;
+        }
+      }
+    },
+    (err) => console.warn('Erro GPS:', err),
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+  );
+}
+
+// ---------- DOWNLOAD DO TRAJETO ----------
+function downloadTrack() {
+  if (track.length === 0) {
+    alert('Nenhum dado registrado ainda.');
+    return;
+  }
+  const dataStr = JSON.stringify(track, null, 2);
+  const blob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `trajeto_${new Date().toISOString().slice(0,19)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------- INICIALIZAÇÃO DA PÁGINA ----------
+// Variáveis auxiliares
+window.lastGps = { lat: null, lon: null, alt: null };
+
+// Quando o usuário clicar no botão, ativa sensores e também a geolocalização
+async function init() {
+  await requestAllPermissions();  // ativa bússola, acelerômetro, giroscópio, quaternion
+  enhancedGeolocation();          // inicia rastreamento GPS e navegação
+  startLogging();                 // começa a registrar dados a cada 1s
+}
+
+// O botão "Ativar todos os sensores" chama init
+window.requestAllPermissions = requestAllPermissions;
+window.downloadTrack = downloadTrack;
+
+// Expor init para o botão (já que usamos onclick)
+// Mas o botão chama requestAllPermissions, que não inicia GPS automaticamente.
+// Melhor: o botão chama uma função que inicia tudo.
+// Vamos renomear:
+window.startGame = async function() {
+  await requestAllPermissions();
+  enhancedGeolocation();
+  startLogging();
+};
+// Atualiza o onclick do botão
+document.querySelector('button[onclick="requestAllPermissions()"]').setAttribute('onclick', 'startGame()');
+
+// Se o usuário clicar no botão, tudo começa.
+// Também podemos permitir que a página peça permissão sem clique? Mas a política exige interação.
+// Portanto, só após o botão.
+
+</script>
 </body>
 </html>
