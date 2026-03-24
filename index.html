@@ -400,7 +400,7 @@ function enhancedGeolocation() {
       document.getElementById('distance').innerText = dist.toFixed(1);
       document.getElementById('bearing').innerText = brng.toFixed(1);
 
-      const err = headingError(heading, brng);
+      const err = -headingError(heading, brng);
       let instrucao = '';
       if (Math.abs(err) < 5) instrucao = 'Siga em frente';
       else if (err > 0) instrucao = `Vire ${err.toFixed(0)}° à direita`;
