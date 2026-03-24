@@ -303,7 +303,7 @@ function startGeolocation() {
       let instrucao = '';
       if (Math.abs(err) < 5) {
         instrucao = 'Siga em frente';
-      } else if (err > 0) {
+      } else if (err < 0) {
         instrucao = `Vire ${err.toFixed(0)}° à direita`;
       } else {
         instrucao = `Vire ${Math.abs(err).toFixed(0)}° à esquerda`;
