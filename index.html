@@ -216,8 +216,8 @@ function onDeviceOrientation(event) {
   // gamma: roll (-90 a 90)    (inclinação lateral)
   if (event.alpha !== null) {
     // Normaliza para heading: 0 = norte, sentido horário
-    // heading = 360 - event.alpha;
-    heading = event.alpha;
+    heading = 360 - event.alpha;
+    //heading = event.alpha;
     if (heading >= 360) heading -= 360;
     document.getElementById('heading').innerText = heading.toFixed(1);
     document.getElementById('heading_euler').innerText = event.alpha.toFixed(1);
@@ -304,7 +304,7 @@ function startGeolocation() {
       document.getElementById('bearing').innerText = brng.toFixed(1);
 
       // Instrução com base no erro de heading
-      const err = headingError(brng,heading);
+      const err = -headingError(heading,brng);
       let instrucao = '';
       if (Math.abs(err) < 5) {
         instrucao = 'Siga em frente';
@@ -419,7 +419,8 @@ function enhancedGeolocation() {
         currentWP++;
         if (currentWP >= waypoints.length) {
           alert('🎉 Parabéns! Tesouro encontrado! 🎉');
-          currentWP = waypoints.length - 1;
+          //currentWP = waypoints.length - 1;
+          currentWP = 0;
         }
       }
     },
