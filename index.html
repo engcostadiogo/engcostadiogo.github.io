@@ -123,15 +123,15 @@ hr {
 <script>
 // ---------- CONFIGURAÇÃO DOS WAYPOINTS ----------
 const waypoints = [
-  //{ lat: -15.83339745,lon: -48.07633867},
-  //{ lat: -15.83352393,lon: -48.07669693},
-  //{ lat: -15.8333287,lon: -48.0767661},
-  //{ lat: -15.83320897,lon: -48.07640727}
+  { lat: -15.83339745,lon: -48.07633867},
+  { lat: -15.83352393,lon: -48.07669693},
+  { lat: -15.8333287,lon: -48.0767661},
+  { lat: -15.83320897,lon: -48.07640727}
 
-  { lat: -15.79868136,lon: -47.93635746},
-  { lat: -15.79844729,lon: -47.93628761},
-  { lat: -15.79842719,lon: -47.93635356},
-  { lat: -15.79889779,lon: -47.936515}
+  //{ lat: -15.79868136,lon: -47.93635746},
+  //{ lat: -15.79844729,lon: -47.93628761},
+  //{ lat: -15.79842719,lon: -47.93635356},
+  //{ lat: -15.79889779,lon: -47.936515}
 ];
 
 let currentWP = 0;               // índice do próximo waypoint
@@ -298,13 +298,13 @@ function startGeolocation() {
       // Calcula distância e rumo para o waypoint atual
       const target = waypoints[currentWP];
       const dist = distance(lat, lon, target.lat, target.lon);
-      const brng = 360-bearing(lat, lon, target.lat, target.lon);
+      const brng = bearing(lat, lon, target.lat, target.lon);
 
       document.getElementById('distance').innerText = dist.toFixed(1);
       document.getElementById('bearing').innerText = brng.toFixed(1);
 
       // Instrução com base no erro de heading
-      const err = -headingError(heading,brng);
+      const err = headingError(brng,heading);
       let instrucao = '';
       if (Math.abs(err) < 5) {
         instrucao = 'Siga em frente';
@@ -406,7 +406,7 @@ function enhancedGeolocation() {
       document.getElementById('distance').innerText = dist.toFixed(1);
       document.getElementById('bearing').innerText = brng.toFixed(1);
 
-      const err = -headingError(heading, brng);
+      const err = headingError(brng,heading);
       let instrucao = '';
       if (Math.abs(err) < 5) instrucao = 'Siga em frente';
       else if (err > 0) instrucao = `Vire ${err.toFixed(0)}° à direita`;
