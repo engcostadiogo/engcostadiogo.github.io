@@ -299,7 +299,7 @@ function startGeolocation() {
       document.getElementById('bearing').innerText = brng.toFixed(1);
 
       // Instrução com base no erro de heading
-      const err = headingError(heading, brng);
+      const err = headingError(brng,heading);
       let instrucao = '';
       if (Math.abs(err) < 5) {
         instrucao = 'Siga em frente';
