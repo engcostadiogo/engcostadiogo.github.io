@@ -77,7 +77,7 @@ hr {
 
 <body>
 
-<h1>🧭 Caça ao Tesouro 2</h1>
+<h1>🧭 Caça ao Tesouro 3</h1>
 
 <div class="card">
   <div id="arrow">⬆️</div>
@@ -167,7 +167,7 @@ function bearing(lat1, lon1, lat2, lon2) {
   const x = Math.cos(toRad(lat1))*Math.sin(toRad(lat2)) -
             Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(dLon);
   let brng = toDeg(Math.atan2(y, x));
-  return (brng + 360) % 360;
+  return 360 - ((brng + 360) % 360);
 }
 
 // Diferença angular com correção para -180..180
@@ -216,7 +216,7 @@ function onDeviceOrientation(event) {
   // gamma: roll (-90 a 90)    (inclinação lateral)
   if (event.alpha !== null) {
     // Normaliza para heading: 0 = norte, sentido horário
-    heading = 360 - event.alpha;
+    heading = event.alpha;
     //heading = event.alpha;
     if (heading >= 360) heading -= 360;
     document.getElementById('heading').innerText = heading.toFixed(1);
@@ -310,7 +310,7 @@ function startGeolocation() {
       if (Math.abs(err) < 5) {
         instrucao = 'Siga em frente';
       } else if (err < 0) {
-        instrucao = `Vire ${err.toFixed(0)}° à direita`;
+        instrucao = `Vire ${Math.abs(err).toFixed(0)}° à direita`;
       } else {
         instrucao = `Vire ${Math.abs(err).toFixed(0)}° à esquerda`;
       }
@@ -410,7 +410,7 @@ function enhancedGeolocation() {
       const err = headingError(brng,heading);
       let instrucao = '';
       if (Math.abs(err) < 5) instrucao = 'Siga em frente';
-      else if (err < 0) instrucao = `Vire ${err.toFixed(0)}° à direita`;
+      else if (err < 0) instrucao = `Vire ${Math.abs(err).toFixed(0)}° à direita`;
       else instrucao = `Vire ${Math.abs(err).toFixed(0)}° à esquerda`;
       document.getElementById('instrucao').innerText = instrucao;
       document.getElementById('arrow').style.transform = `rotate(${-err}deg)`;
