@@ -77,7 +77,7 @@ hr {
 
 <body>
 
-<h1>🧭 Caça ao Tesouro 3</h1>
+<h1>🧭 Caça ao Tesouro 2</h1>
 
 <div class="card">
   <div id="arrow">⬆️</div>
@@ -309,13 +309,13 @@ function startGeolocation() {
       let instrucao = '';
       if (Math.abs(err) < 5) {
         instrucao = 'Siga em frente';
-      } else if (err < 0) {
+      } else if (err > 0) {
         instrucao = `Vire ${Math.abs(err).toFixed(0)}° à direita`;
       } else {
         instrucao = `Vire ${Math.abs(err).toFixed(0)}° à esquerda`;
       }
       document.getElementById('instrucao').innerText = instrucao;
-      document.getElementById('arrow').style.transform = `rotate(${-err}deg)`;
+      document.getElementById('arrow').style.transform = `rotate(${err}deg)`;
 
       // Verifica se chegou ao waypoint (raio 10m)
       if (dist < 10) {
@@ -410,10 +410,10 @@ function enhancedGeolocation() {
       const err = headingError(brng,heading);
       let instrucao = '';
       if (Math.abs(err) < 5) instrucao = 'Siga em frente';
-      else if (err < 0) instrucao = `Vire ${Math.abs(err).toFixed(0)}° à direita`;
+      else if (err > 0) instrucao = `Vire ${Math.abs(err).toFixed(0)}° à direita`;
       else instrucao = `Vire ${Math.abs(err).toFixed(0)}° à esquerda`;
       document.getElementById('instrucao').innerText = instrucao;
-      document.getElementById('arrow').style.transform = `rotate(${-err}deg)`;
+      document.getElementById('arrow').style.transform = `rotate(${err}deg)`;
 
       if (dist < 10) {
         alert(`Waypoint ${currentWP+1} alcançado!`);
