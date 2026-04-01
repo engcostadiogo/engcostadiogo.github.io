@@ -309,13 +309,13 @@ function startGeolocation() {
       let instrucao = '';
       if (Math.abs(err) < 5) {
         instrucao = 'Siga em frente';
-      } else if (err > 0) {
+      } else if (err < 0) {
         instrucao = `Vire ${err.toFixed(0)}° à direita`;
       } else {
         instrucao = `Vire ${Math.abs(err).toFixed(0)}° à esquerda`;
       }
       document.getElementById('instrucao').innerText = instrucao;
-      document.getElementById('arrow').style.transform = `rotate(${err}deg)`;
+      document.getElementById('arrow').style.transform = `rotate(${-err}deg)`;
 
       // Verifica se chegou ao waypoint (raio 10m)
       if (dist < 10) {
@@ -413,7 +413,7 @@ function enhancedGeolocation() {
       else if (err > 0) instrucao = `Vire ${err.toFixed(0)}° à direita`;
       else instrucao = `Vire ${Math.abs(err).toFixed(0)}° à esquerda`;
       document.getElementById('instrucao').innerText = instrucao;
-      document.getElementById('arrow').style.transform = `rotate(${err}deg)`;
+      document.getElementById('arrow').style.transform = `rotate(${-err}deg)`;
 
       if (dist < 10) {
         alert(`Waypoint ${currentWP+1} alcançado!`);
